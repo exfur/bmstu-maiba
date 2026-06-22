@@ -1,0 +1,8 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+  "python.analysis.autoImportCompletions": true,
+  "jupyter.notebookFileRoot": "${workspaceFolder}",
+  "files.associations": {
+    "*.ipynb": "jupyter"
+  }
+}

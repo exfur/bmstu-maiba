@@ -1,0 +1,6 @@
+export.ps1
+.venv
+__pycache__
+data
+uv.lock
+sandbox
