@@ -2,6 +2,10 @@
   "recommendations": [
     "ms-python.python",
     "ms-toolsai.jupyter",
-    "charliermarsh.ruff" // Отличный быстрый линтер от создателей uv
+    "charliermarsh.ruff"
+  ],
+  "unwantedRecommendations": [
+    "ms-python.black-formatter",
+    "ms-python.flake8"
   ]
 }

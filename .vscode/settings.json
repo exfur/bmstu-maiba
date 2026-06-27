@@ -4,5 +4,15 @@
   "jupyter.notebookFileRoot": "${workspaceFolder}",
   "files.associations": {
     "*.ipynb": "jupyter"
-  }
+  },
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+  "python.languageServer": "Pylance",  
+  "python.analysis.typeCheckingMode": "basic"
 }

@@ -13,6 +13,79 @@
         "panel": "shared"
       },
       "group": "none"
+    },
+    {
+      "label": "Auto-Install Extensions",
+      "type": "shell",
+      "command": "code --install-extension ms-python.vscode-pylance && code --install-extension charliermarsh.ruff",
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Run Tests (Pytest)",
+      "type": "shell",
+      "command": "uv run pytest",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Project Check (Lint & Format)",
+      "type": "shell",
+      "command": "uv run ruff check . && uv run ruff format --check .",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Fix All Lint/Format Issues",
+      "type": "shell",
+      "command": "uv run ruff check . --fix && uv run ruff format .",
+      "group": "none",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Update Dependencies (UV Lock)",
+      "type": "shell",
+      "command": "uv lock --upgrade",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Clean Python Cache",
+      "type": "shell",
+      "command": "python -c \"import pathlib; [p.unlink() for p in pathlib.Path('.').rglob('*.pyc')]; [__import__('shutil').rmtree(p) for p in pathlib.Path('.').rglob('__pycache__')]\"",
+      "group": "none",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "problemMatcher": []
     }
   ]
 }
