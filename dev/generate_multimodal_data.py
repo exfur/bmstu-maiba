@@ -374,6 +374,8 @@ class ProfileCorruptor:
             cfg = self.config["ERR_WHITESPACE_NAN"]
             cols = self._get_target_cols(cfg.get("target_columns"), df_noisy)
             for col in cols:
+                # FIX: Explicitly cast to object to allow string injection into float/int columns
+                df_noisy[col] = df_noisy[col].astype("object")
                 mask = np.random.rand(len(df_noisy)) < cfg["ratio"]
                 df_noisy.loc[mask, col] = [
                     random.choice(cfg.get("values", [" "])) for _ in range(mask.sum())
@@ -384,6 +386,8 @@ class ProfileCorruptor:
             cfg = self.config["ERR_STRING_PLACEHOLDER"]
             cols = self._get_target_cols(cfg.get("target_columns"), df_noisy)
             for col in cols:
+                # FIX: Explicitly cast to object
+                df_noisy[col] = df_noisy[col].astype("object")
                 mask = np.random.rand(len(df_noisy)) < cfg["ratio"]
                 df_noisy.loc[mask, col] = [
                     random.choice(cfg["values"]) for _ in range(mask.sum())
@@ -405,6 +409,8 @@ class ProfileCorruptor:
             cfg = self.config["ERR_MIXED_BOOLEAN"]
             cols = self._get_target_cols(cfg.get("target_columns"), df_noisy)
             for col in cols:
+                # FIX: Explicitly cast to object
+                df_noisy[col] = df_noisy[col].astype("object")
                 mask = np.random.rand(len(df_noisy)) < cfg["ratio"]
                 df_noisy.loc[mask, col] = [
                     random.choice(cfg["values"]) for _ in range(mask.sum())
@@ -743,17 +749,19 @@ def main():
 
     target_column = config.get("target_column", "Churn")
 
-    print("3. Применение шума к profiles.csv...")
-    corruptor = ProfileCorruptor(config)
-    profiles_df = corruptor.apply_noise(raw_df)
-
-    print("4. Симуляция поведенческих логов transactions.csv...")
+    # Симуляции запускаются СТРОГО до внесения шума, на чистых данных
+    print("3. Симуляция поведенческих логов transactions.csv...")
     simulator = TransactionSimulator(config, target_col=target_column)
     transactions_df = simulator.generate(raw_df)
 
-    print(f"5. Генерация LLM текстов для reviews.csv (AI Enabled: {not no_ai_flag})...")
+    print(f"4. Генерация LLM текстов для reviews.csv (AI Enabled: {not no_ai_flag})...")
     synthesizer = ReviewSynthesizer(config, target_col=target_column, no_ai=no_ai_flag)
     reviews_df = synthesizer.generate(raw_df)
+
+    # Шум применяется в самом конце перед сохранением
+    print("5. Применение шума к profiles.csv...")
+    corruptor = ProfileCorruptor(config)
+    profiles_df = corruptor.apply_noise(raw_df)
 
     # Берем dataset_id из Google Sheet (или используем fallback имя)
     dataset_name = config.get("dataset_id", f"variant_{target_variant}")
