@@ -562,9 +562,10 @@ class TransactionSimulator:
 
 
 class ReviewSynthesizer:
-    def __init__(self, config: dict, target_col: str):
+    def __init__(self, config: dict, target_col: str, no_ai: bool = False):
         self.config = config
         self.target_col = target_col
+        self.no_ai = no_ai
 
     def generate(self, profiles_df: pd.DataFrame) -> pd.DataFrame:
         cfg = self.config.get("SENTIMENT_CONFIG", {})
@@ -640,12 +641,10 @@ class ReviewSynthesizer:
                         )
 
             # 3. Clean and Normalize Probabilities
-            # Ensure no probability drops below 0 due to negative shifts
             behavior["positive"] = max(0.0, behavior["positive"])
             behavior["neutral"] = max(0.0, behavior["neutral"])
             behavior["negative"] = max(0.0, behavior["negative"])
 
-            # Re-normalize so they perfectly sum to 1.0
             total = behavior["positive"] + behavior["neutral"] + behavior["negative"]
             if total == 0:
                 behavior["neutral"] = 1.0
@@ -655,29 +654,43 @@ class ReviewSynthesizer:
             behavior["neutral"] /= total
             behavior["negative"] /= total
 
-            # 4. Generate the Reviews via LLM
+            # 4. Generate the Reviews via LLM or Placeholder
             for _ in range(num_reviews):
                 chosen_sentiment = np.random.choice(
                     ["positive", "neutral", "negative"],
                     p=[behavior["positive"], behavior["neutral"], behavior["negative"]],
                 )
 
-                system_instruction = (
-                    "You are an automated backend database generator. You output ONLY raw data. "
-                    "CRITICAL: Never talk to the user. Never write intro, notes, explanations, or wrapping quotes. "
-                    f"{length_instruction}"
-                )
+                if self.no_ai:
+                    # Output JSON placeholder instead of LLM inference
+                    placeholder_data = {
+                        "placeholder": True,
+                        "intended_sentiment": chosen_sentiment,
+                        "context": behavior.get("context", "unknown"),
+                        "probabilities": {
+                            "positive": round(behavior["positive"], 3),
+                            "neutral": round(behavior["neutral"], 3),
+                            "negative": round(behavior["negative"], 3),
+                        },
+                    }
+                    review_text = json.dumps(placeholder_data)
+                else:
+                    system_instruction = (
+                        "You are an automated backend database generator. You output ONLY raw data. "
+                        "CRITICAL: Never talk to the user. Never write intro, notes, explanations, or wrapping quotes. "
+                        f"{length_instruction}"
+                    )
 
-                user_prompt = (
-                    f"Generate a realistic customer review with strict {chosen_sentiment.upper()} sentiment.\n"
-                    f"Context topic: {behavior['context']}\n"
-                    "Raw Review Text:"
-                )
+                    user_prompt = (
+                        f"Generate a realistic customer review with strict {chosen_sentiment.upper()} sentiment.\n"
+                        f"Context topic: {behavior['context']}\n"
+                        "Raw Review Text:"
+                    )
 
-                full_prompt = f"<start_of_turn>user\n{system_instruction}\n\n{user_prompt}<end_of_turn>\n<start_of_turn>model\n"
+                    full_prompt = f"<start_of_turn>user\n{system_instruction}\n\n{user_prompt}<end_of_turn>\n<start_of_turn>model\n"
 
-                review_text = ask_ollama(full_prompt)
-                review_text = review_text.strip().strip('"').strip("'")
+                    review_text = ask_ollama(full_prompt)
+                    review_text = review_text.strip().strip('"').strip("'")
 
                 reviews.append(
                     {
@@ -709,10 +722,16 @@ def main():
         choices=range(1, 16),
         help="Номер варианта для генерации (целое число от 1 до 15). По умолчанию: 1.",
     )
+    parser.add_argument(
+        "--no-ai",
+        action="store_true",
+        help="Skip LLM generation and insert a placeholder JSON with calculated sentiments.",
+    )
 
     # Читаем аргументы
     args = parser.parse_args()
     target_variant = args.variant
+    no_ai_flag = args.no_ai
 
     print(f"1. Получение конфигурации для варианта {target_variant}...")
     config = fetch_config_from_gsheet(target_variant)
@@ -732,13 +751,10 @@ def main():
     simulator = TransactionSimulator(config, target_col=target_column)
     transactions_df = simulator.generate(raw_df)
 
-    print("5. Генерация LLM текстов для reviews.csv...")
-    synthesizer = ReviewSynthesizer(config, target_col=target_column)
+    print(f"5. Генерация LLM текстов для reviews.csv (AI Enabled: {not no_ai_flag})...")
+    synthesizer = ReviewSynthesizer(config, target_col=target_column, no_ai=no_ai_flag)
     reviews_df = synthesizer.generate(raw_df)
 
-    # ---------------------------------------------------------
-    # НОВАЯ ЛОГИКА СОХРАНЕНИЯ: Группировка по папкам вариантов
-    # ---------------------------------------------------------
     # Берем dataset_id из Google Sheet (или используем fallback имя)
     dataset_name = config.get("dataset_id", f"variant_{target_variant}")
     output_dir = os.path.join("data", "processed", dataset_name)
