@@ -1,53 +1,15 @@
 import glob
-import json
 import os
 
 import nbformat
-import requests
 
 # ==========================================
 # CONFIGURATION
 # ==========================================
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
-OLLAMA_MODEL_NAME = "gemma3:4b"
-
+# Папка, где лежат исходные мастер-ноутбуки (с решениями и шаблонами)
 SOURCE_DIR = os.path.join(".", "examples", "seminars")
+# Папка, куда сохраняются чистые студенческие версии
 TARGET_DIR = r"C:\Users\User\Projects\bmstu\maiba\seminars"
-
-
-# ==========================================
-# OLLAMA API CALL (Templates Only)
-# ==========================================
-def generate_student_template(solution_code):
-    url = f"{OLLAMA_BASE_URL}/api/generate"
-
-    prompt = f"""You are an educational Python developer. I will provide you with a raw Python code block from a completed solution.
-Your ONLY job is to convert this code into a template for students. 
-Replace core metrics, parameters, functions, or algorithmic lines with an explicit line: raise NotImplementedError("Ваш код здесь"). 
-Keep the baseline scaffolding (variable setups, standard print structures) visible so they know contextually where to add their code.
-
-Code to process:
-{solution_code}
-
-Return EXACTLY a valid JSON object matching this schema. Do not output markdown codeblocks:
-{{
-    "student_template_code": "The code string with raise NotImplementedError(\\\"Ваш код здесь\\\") replacements"
-}}
-"""
-    payload = {
-        "model": OLLAMA_MODEL_NAME,
-        "prompt": prompt,
-        "stream": False,
-        "format": "json",
-    }
-
-    try:
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
-        return json.loads(response.json()["response"])
-    except Exception as e:
-        print(f"   [!] Network/JSON exception with Ollama: {e}")
-        return {}
 
 
 # ==========================================
@@ -62,7 +24,7 @@ def main():
         print(f"No notebooks found in source directory: {SOURCE_DIR}")
         return
 
-    print(f"Found {len(notebook_files)} notebooks for TEMPLATE generation.")
+    print(f"Found {len(notebook_files)} notebooks for student version generation.")
 
     for file_path in notebook_files:
         filename = os.path.basename(file_path)
@@ -71,49 +33,50 @@ def main():
         with open(file_path, "r", encoding="utf-8") as f:
             nb = nbformat.read(f, as_version=4)
 
-        file_has_tasks = False
-        task_counter = 1
+        new_cells = []
+        removed_masters_count = 0
+        processed_templates_count = 0
 
+        # Пошагово фильтруем структуру ячеек ноутбука
         for cell in nb.cells:
             if cell.cell_type == "code":
-                solution_code = cell.source.strip()
+                source_code = cell.source
 
-                if not solution_code:
-                    continue
+                # Шаг 1. Если это блок решения преподавателя — полностью удаляем его из студенческой версии
+                if "[MASTER SOLUTION]" in source_code:
+                    removed_masters_count += 1
+                    continue  # Пропускаем ячейку, она не попадет в финальный файл
 
-                # Rule check 1: Skip if it contains an import statement
-                if any(
-                    line.strip().startswith(("import ", "from "))
-                    for line in solution_code.split("\n")
-                ):
-                    print("    -> Skipping block (contains imports).")
-                    continue
+                # Шаг 2. Если это шаблон для студента — сохраняем его и убираем служебный маркер для чистоты
+                if "[STUDENT TEMPLATE]" in source_code:
+                    # Вырезаем служебную строку-маркер, чтобы оставить код pristine чистым
+                    cleaned_code = source_code.replace(
+                        "# [STUDENT TEMPLATE]\n", ""
+                    ).replace("# [STUDENT TEMPLATE]", "")
+                    cell.source = cleaned_code
+                    processed_templates_count += 1
 
-                # Rule check 2: Skip autocheck validation blocks
-                if "run_autocheck" in solution_code:
-                    print("    -> Skipping block (contains run_autocheck validation).")
-                    continue
+            # Все остальные ячейки (markdown-описания, базовые импорты, настройки отображения и автотесты)
+            # автоматически сохраняются без каких-либо изменений
+            new_cells.append(cell)
 
-                print(f"    -> Templating code block #{task_counter}...")
+        # Перезаписываем список ячеек отфильтрованным результатом
+        nb.cells = new_cells
 
-                ai_data = generate_student_template(solution_code)
+        # Сохраняем готовую студенческую версию в целевую директорию
+        target_file_path = os.path.join(TARGET_DIR, filename)
+        with open(target_file_path, "w", encoding="utf-8") as f:
+            if hasattr(nbformat, "normalize"):
+                nbformat.normalize(nb)
+            nbformat.write(nb, f)
 
-                student_code = ai_data.get(
-                    "student_template_code",
-                    '# TODO: Восстановите код решения\nraise NotImplementedError("Ваш код здесь")',
-                )
-                cell.source = student_code
-
-                task_counter += 1
-                file_has_tasks = True
-
-        if file_has_tasks:
-            target_file_path = os.path.join(TARGET_DIR, filename)
-            with open(target_file_path, "w", encoding="utf-8") as f:
-                if hasattr(nbformat, "normalize"):
-                    nbformat.normalize(nb)
-                nbformat.write(nb, f)
-            print(f" -> Successfully saved templates to: {target_file_path}")
+        print(
+            f" -> Successfully cleaned: Removed {removed_masters_count} master solutions."
+        )
+        print(
+            f" -> Successfully prepared: Processed {processed_templates_count} student templates."
+        )
+        print(f" -> Saved production notebook to: {target_file_path}")
 
 
 if __name__ == "__main__":
