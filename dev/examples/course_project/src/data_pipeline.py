@@ -1,4 +1,3 @@
-import importlib.util
 import os
 import warnings
 
@@ -6,20 +5,19 @@ import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
+from transformers import pipeline
 
 # Suppress Hugging Face/TensorFlow warnings for clean output
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 warnings.filterwarnings("ignore")
 
-# Safely check for transformers availability without unused imports
-HAS_TRANSFORMERS = importlib.util.find_spec("transformers") is not None
-
 
 def clean_and_normalise_dataframe(
-    df: pd.DataFrame, datetime_cols: list | None = None, drop_dup: bool = True
+    df: pd.DataFrame, datetime_cols: list = None, drop_dup: bool = True
 ) -> pd.DataFrame:
     """
     Industrial ETL function for end-to-end cleaning and normalization of the profiles dataframe.
+    Ensures numerical columns like 'tenure' are explicitly cast to prevent comparison type errors.
     """
     df_clean = df.copy()
 
@@ -37,7 +35,13 @@ def clean_and_normalise_dataframe(
             if col in df_clean.columns:
                 df_clean[col] = pd.to_datetime(df_clean[col], errors="coerce")
 
-    # 4. Clean numerics & Fill NaN
+    # 4. Clean tenure column first so it can be safely used for numerical conditional logic downstream
+    if "tenure" in df_clean.columns:
+        df_clean["tenure"] = pd.to_numeric(df_clean["tenure"], errors="coerce")
+        if df_clean["tenure"].isnull().sum() > 0:
+            df_clean["tenure"] = df_clean["tenure"].fillna(df_clean["tenure"].median())
+
+    # 5. Clean other numerics & Fill NaN
     numeric_targets = ["TotalCharges", "MonthlyCharges", "Num_Feature_X"]
     for col in numeric_targets:
         if col in df_clean.columns:
@@ -46,6 +50,7 @@ def clean_and_normalise_dataframe(
             )
             df_clean[col] = pd.to_numeric(df_clean[col], errors="coerce")
             if "tenure" in df_clean.columns:
+                # Business logic: If customer is completely new (tenure == 0), assign zero charges
                 df_clean[col] = np.where(
                     (df_clean["tenure"] == 0) & (df_clean[col].isnull()),
                     0.0,
@@ -54,7 +59,7 @@ def clean_and_normalise_dataframe(
             if df_clean[col].isnull().sum() > 0:
                 df_clean[col] = df_clean[col].fillna(df_clean[col].median())
 
-    # 5. Normalise Booleans and Categories
+    # 6. Normalise Booleans and Categories
     true_variants = ["YES", "Y", "1", "TRUE", "1.0"]
     false_variants = ["NO", "N", "0", "FALSE", "0.0"]
     binary_cols = [
@@ -81,7 +86,7 @@ def clean_and_normalise_dataframe(
         if col in df_clean.columns:
             df_clean[col] = df_clean[col].astype(str).str.strip().str.lower()
 
-    # 6. Remove Duplicates
+    # 7. Remove Duplicates
     if drop_dup:
         df_clean = df_clean.drop_duplicates()
 
@@ -192,14 +197,16 @@ def extract_sentiment_features(
     df: pd.DataFrame,
     text_col: str,
     id_col: str,
-    model_name: str = "tabularisai/multilingual-sentiment-analysis",
+    model_name: str = "data/seminar_4_nlp_sentiment/models",
 ) -> pd.DataFrame:
     """
-    NLP sentiment extraction pipeline. Cleans text, evaluates emotion, and maps to numeric bounds.
+    NLP sentiment extraction pipeline. Cleans text, runs batched Transformer inference.
+    If local weights are missing or empty at model_name, automatically downloads them
+    from the Hugging Face Hub, saves them locally to that path for future offline runs, and proceeds.
     """
     df_pipe = df.copy()
 
-    # Clean text
+    # 1. Clean text
     clean_col = "Clean_Text_Tmp"
     df_pipe[clean_col] = df_pipe[text_col].astype(str).str.lower()
     df_pipe[clean_col] = df_pipe[clean_col].str.replace(r"[^\w\s]", " ", regex=True)
@@ -207,19 +214,82 @@ def extract_sentiment_features(
         df_pipe[clean_col].str.replace(r"\s+", " ", regex=True).str.strip()
     )
 
-    def _score(text):
-        if not text or str(text).strip() == "":
-            return 0.0
-        text = str(text)
-        # Fast fallback logic (uses global HAS_TRANSFORMERS flag if you tie in model inference later)
-        if "ужас" in text or "зол" in text or "верните" in text or "angry" in text:
-            return -1.0
-        if "отличн" in text or "спасибо" in text or "great" in text:
-            return 1.0
-        return 0.0
+    # 2. Robust Absolute Path Resolver
+    resolved_path = os.path.abspath(model_name)
 
-    df_pipe["Sentiment_Score"] = df_pipe[clean_col].apply(_score)
+    # Fallback: Check climbing up from dev/ folder structure context
+    if not os.path.exists(resolved_path) or not os.listdir(resolved_path):
+        root_fallback = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", model_name)
+        )
+        if os.path.exists(root_fallback) and os.listdir(root_fallback):
+            resolved_path = root_fallback
 
+    # Determine if a valid local directory with cached model files is present
+    is_local_present = (
+        os.path.exists(resolved_path)
+        and os.path.isdir(resolved_path)
+        and len(os.listdir(resolved_path)) > 0
+    )
+
+    # 3. Conditional Pipeline Loading (Offline vs Self-Healing Installer)
+    if is_local_present:
+        print(
+            f"⏳ Loading local Transformer weights from absolute path: {resolved_path}"
+        )
+        nlp_classifier = pipeline(
+            "text-classification",
+            model=resolved_path,
+            tokenizer=resolved_path,
+            truncation=True,
+            max_length=512,
+            local_files_only=True,  # Strictly lock framework to local files
+        )
+    else:
+        # 🚀 "Install if not present" pipeline download & compilation engine
+        remote_repo = "tabularisai/multilingual-sentiment-analysis"
+        print(f"⚠️ Local weights not found or folder is empty at: '{resolved_path}'")
+        print(f"📥 Downloading weights for '{remote_repo}' from Hugging Face Hub...")
+        print(
+            f"💾 Saving components locally to '{resolved_path}' for future offline runs..."
+        )
+
+        # Build the exact local directory tree structure
+        os.makedirs(resolved_path, exist_ok=True)
+
+        # Instantiate from the remote web registry
+        nlp_classifier = pipeline(
+            "text-classification",
+            model=remote_repo,
+            truncation=True,
+            max_length=512,
+            local_files_only=False,
+        )
+
+        # Serialize the structures down to your custom folder path
+        nlp_classifier.model.save_pretrained(resolved_path)
+        nlp_classifier.tokenizer.save_pretrained(resolved_path)
+        print("✅ Model downloaded and successfully cached to your local data folder!")
+
+    # 4. Batch process all reviews simultaneously for high performance
+    raw_texts = df_pipe[clean_col].tolist()
+    print(f"🚀 Running batched inference on {len(raw_texts)} reviews...")
+    model_outputs = nlp_classifier(raw_texts, batch_size=16)
+
+    # 5. Map textual star labels directly to categorical numeric intervals
+    mapped_scores = []
+    for out in model_outputs:
+        label = str(out["label"]).lower()
+        if "1" in label or "2" in label or "negative" in label:
+            mapped_scores.append(-1.0)
+        elif "4" in label or "5" in label or "positive" in label:
+            mapped_scores.append(1.0)
+        else:
+            mapped_scores.append(0.0)
+
+    df_pipe["Sentiment_Score"] = mapped_scores
+
+    # 6. Collapse multiple user reviews into a single mean metric per unique ID
     df_result = df_pipe.groupby(id_col)["Sentiment_Score"].mean().reset_index()
     df_result.rename(columns={"Sentiment_Score": "Mean_Sentiment"}, inplace=True)
 
