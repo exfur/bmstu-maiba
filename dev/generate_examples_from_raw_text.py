@@ -117,14 +117,14 @@ def convert_txt_to_ipynb(input_dir, output_dir):
 
 if __name__ == "__main__":
     # 1. Seminars Processing
-    SEMINARS_INPUT = os.path.join("land_data", "seminars")
+    SEMINARS_INPUT = os.path.join("data/land_data", "seminars")
     SEMINARS_OUTPUT = os.path.join("examples", "seminars")
 
     print("--- Processing Seminars Batch ---")
     convert_txt_to_ipynb(SEMINARS_INPUT, SEMINARS_OUTPUT)
 
     # 2. Course Project Notebooks Processing
-    NOTEBOOKS_INPUT = os.path.join("land_data", "notebooks")
+    NOTEBOOKS_INPUT = os.path.join("data/land_data", "notebooks")
     # Using a raw string (r"...") to handle Windows backslashes properly
     NOTEBOOKS_OUTPUT = (
         r"C:\Users\User\Projects\bmstu\maiba\dev\examples\course_project\notebooks"
