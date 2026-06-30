@@ -75,12 +75,23 @@ def convert_ipynb_to_txt(input_dir, output_dir):
         with open(output_path, "w", encoding="utf-8") as out_f:
             out_f.writelines(txt_lines)
 
-    print("\nReverse structure reconstruction complete.")
+    print(f"Reverse structure reconstruction complete for: {input_dir} -> {output_dir}")
 
 
 if __name__ == "__main__":
-    # Configure inverse production paths
-    INPUT_DIRECTORY = os.path.join("examples", "seminars")
-    OUTPUT_DIRECTORY = os.path.join("data", "land_data")
+    # 1. Seminars Reverse Processing
+    SEMINARS_INPUT = os.path.join("examples", "seminars")
+    SEMINARS_OUTPUT = os.path.join("data/land_data", "seminars")
 
-    convert_ipynb_to_txt(INPUT_DIRECTORY, OUTPUT_DIRECTORY)
+    print("--- Reverse Processing Seminars Batch ---")
+    convert_ipynb_to_txt(SEMINARS_INPUT, SEMINARS_OUTPUT)
+
+    # 2. Course Project Notebooks Reverse Processing
+    # Using a raw string (r"...") to safely handle Windows backslashes
+    NOTEBOOKS_INPUT = (
+        r"C:\Users\User\Projects\bmstu\maiba\dev\examples\course_project\notebooks"
+    )
+    NOTEBOOKS_OUTPUT = os.path.join("data/land_data", "notebooks")
+
+    print("\n--- Reverse Processing Course Project Notebooks Batch ---")
+    convert_ipynb_to_txt(NOTEBOOKS_INPUT, NOTEBOOKS_OUTPUT)

@@ -112,12 +112,23 @@ def convert_txt_to_ipynb(input_dir, output_dir):
         with open(output_path, "w", encoding="utf-8") as out_f:
             json.dump(notebook_data, out_f, indent=1, ensure_ascii=False)
 
-    print("\nConversion layout complete structure initialized.")
+    print(f"Conversion layout complete for layout: {input_dir} -> {output_dir}")
 
 
 if __name__ == "__main__":
-    # Configure production relative paths
-    INPUT_DIRECTORY = os.path.join("data", "land_data")
-    OUTPUT_DIRECTORY = os.path.join("examples", "seminars")
+    # 1. Seminars Processing
+    SEMINARS_INPUT = os.path.join("land_data", "seminars")
+    SEMINARS_OUTPUT = os.path.join("examples", "seminars")
 
-    convert_txt_to_ipynb(INPUT_DIRECTORY, OUTPUT_DIRECTORY)
+    print("--- Processing Seminars Batch ---")
+    convert_txt_to_ipynb(SEMINARS_INPUT, SEMINARS_OUTPUT)
+
+    # 2. Course Project Notebooks Processing
+    NOTEBOOKS_INPUT = os.path.join("land_data", "notebooks")
+    # Using a raw string (r"...") to handle Windows backslashes properly
+    NOTEBOOKS_OUTPUT = (
+        r"C:\Users\User\Projects\bmstu\maiba\dev\examples\course_project\notebooks"
+    )
+
+    print("\n--- Processing Course Project Notebooks Batch ---")
+    convert_txt_to_ipynb(NOTEBOOKS_INPUT, NOTEBOOKS_OUTPUT)
