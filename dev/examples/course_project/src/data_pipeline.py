@@ -1,3 +1,4 @@
+import importlib.util
 import os
 import warnings
 
@@ -10,14 +11,12 @@ from sklearn.preprocessing import StandardScaler
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 warnings.filterwarnings("ignore")
 
-try:
-    from transformers import pipeline
-except ImportError:
-    pass
+# Safely check for transformers availability without unused imports
+HAS_TRANSFORMERS = importlib.util.find_spec("transformers") is not None
 
 
 def clean_and_normalise_dataframe(
-    df: pd.DataFrame, datetime_cols: list = None, drop_dup: bool = True
+    df: pd.DataFrame, datetime_cols: list | None = None, drop_dup: bool = True
 ) -> pd.DataFrame:
     """
     Industrial ETL function for end-to-end cleaning and normalization of the profiles dataframe.
@@ -90,7 +89,9 @@ def clean_and_normalise_dataframe(
 
 
 def engineer_profile_features(
-    df: pd.DataFrame, categorical_to_encode: list = None, numeric_to_scale: list = None
+    df: pd.DataFrame,
+    categorical_to_encode: list | None = None,
+    numeric_to_scale: list | None = None,
 ) -> pd.DataFrame:
     """
     Parametrized industrial function for Feature Engineering.
@@ -210,7 +211,7 @@ def extract_sentiment_features(
         if not text or str(text).strip() == "":
             return 0.0
         text = str(text)
-        # Fast fallback logic (in case transformer dependencies are missing on run)
+        # Fast fallback logic (uses global HAS_TRANSFORMERS flag if you tie in model inference later)
         if "ужас" in text or "зол" in text or "верните" in text or "angry" in text:
             return -1.0
         if "отличн" in text or "спасибо" in text or "great" in text:

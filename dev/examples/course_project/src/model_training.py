@@ -7,12 +7,15 @@ from sklearn.model_selection import train_test_split
 
 try:
     import shap
-    from pycaret.classification import (
-        compare_models,
-        finalize_model,
-        pull,
-        save_model,
-        setup,
+
+    # type: ignore is used here because PyCaret dynamically loads modules at runtime,
+    # which causes static analysis tools like Pylance to report missing attributes.
+    from pycaret.classification import (  # type: ignore
+        compare_models,  # type: ignore
+        finalize_model,  # type: ignore
+        pull,  # type: ignore
+        save_model,  # type: ignore
+        setup,  # type: ignore
     )
 except ImportError:
     pass
@@ -73,7 +76,9 @@ def run_automl_and_explain(
     Saves final artifact to disk.
     """
     print("Initializing PyCaret AutoML Environment...")
-    clf_setup = setup(
+    # Removed the 'clf_setup =' assignment to resolve Ruff's F841 unused variable warning.
+    # PyCaret's setup builds the context statefully behind the scenes.
+    setup(
         data=df,
         target=target_col,
         ignore_features=["Target_ID"] if "Target_ID" in df.columns else None,

@@ -27,7 +27,9 @@ def forecast_trends(
 
     # 2. Initialize and fit the Meta Prophet model
     model = Prophet(
-        yearly_seasonality=False, weekly_seasonality=True, daily_seasonality=False
+        yearly_seasonality=False,  # type: ignore
+        weekly_seasonality=True,  # type: ignore
+        daily_seasonality=False,  # type: ignore
     )
     model.fit(df_clean)
 
