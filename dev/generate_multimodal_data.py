@@ -3,12 +3,14 @@ import json
 import os
 import random
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
 import requests
 from googleapiclient.discovery import build
+from tqdm import tqdm
 from utils import get_creds
 
 # ==========================================
@@ -18,6 +20,9 @@ GSHEET_ID = os.getenv("SOURCE_GSHEET")
 SHEET_NAME = "legends"
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
 OLLAMA_MODEL_NAME = "gemma3:4b"
+MAX_CONCURRENT_REQUESTS = (
+    8  # Slightly higher than parallel settings to keep the queue saturated
+)
 
 
 def clean_json_string(raw_str: str) -> str:
@@ -29,13 +34,11 @@ def clean_json_string(raw_str: str) -> str:
         return raw_str
 
     cleaned = raw_str.strip()
-    # Strip explicit outer wrapper quotes from export translations
     if cleaned.startswith('"""') and cleaned.endswith('"""'):
         cleaned = cleaned[3:-3]
     elif cleaned.startswith('"') and cleaned.endswith('"'):
         cleaned = cleaned[1:-1]
 
-    # Standardize doubled double-quotes back into functional JSON parameters
     cleaned = cleaned.replace('""', '"')
     return cleaned.strip()
 
@@ -71,7 +74,6 @@ def fetch_config_from_gsheet(target_variant: int = 1) -> dict:
 
                 raw_value = clean_json_string(row[target_variant])
 
-                # Dynamic parsing check for both JSON dictionaries and list arrays
                 if raw_value.startswith("{") or raw_value.startswith("["):
                     try:
                         config[key] = json.loads(raw_value)
@@ -102,7 +104,8 @@ def ask_ollama(prompt: str) -> str:
     url = f"{OLLAMA_BASE_URL}/api/generate"
     payload = {"model": OLLAMA_MODEL_NAME, "prompt": prompt, "stream": False}
     try:
-        response = requests.post(url, json=payload, timeout=15)
+        # Increased timeout to 60s to safely allow queueing under load
+        response = requests.post(url, json=payload, timeout=60)
         response.raise_for_status()
         return response.json().get("response", "").strip()
     except Exception:
@@ -127,7 +130,6 @@ class MultimodalDataGenerator:
 
         self.target_col = self.config.get("target_column", "Target_Flag")
 
-        # Parse text cells into structured dictionaries
         self.base_gen = self._ensure_dict("BASE_GENERATION")
         self.dgp_equations = self._ensure_dict("DGP_EQUATIONS")
         self.behavioral_logic = self._ensure_dict("BEHAVIORAL_LOGIC")
@@ -137,7 +139,6 @@ class MultimodalDataGenerator:
         self.num_users = self.base_gen.get("num_rows", 5000)
 
     def _ensure_dict(self, key: str) -> dict:
-        """Safely parses string values into dictionaries, handling formatting discrepancies."""
         val = self.config.get(key, {})
         if isinstance(val, str):
             cleaned = clean_json_string(val)
@@ -150,7 +151,6 @@ class MultimodalDataGenerator:
         return val if isinstance(val, dict) else {}
 
     def _ensure_list(self, key: str) -> list:
-        """Safely extracts configurations as structured lists."""
         val = self.config.get(key, [])
         if isinstance(val, str):
             cleaned = clean_json_string(val)
@@ -161,7 +161,6 @@ class MultimodalDataGenerator:
         return val if isinstance(val, list) else []
 
     def run_pipeline(self):
-        """Orchestrates generation routines, math models, and structural purges."""
         self._generate_raw_profiles()
         self._generate_base_transactions()
         self._generate_base_nlp_sentiments()
@@ -174,7 +173,6 @@ class MultimodalDataGenerator:
         return self._purge_and_export()
 
     def _generate_raw_profiles(self):
-        """Generates the raw structural input features."""
         columns_cfg = self.base_gen.get("columns", {})
         df_data = {"Target_ID": [f"USR_{i:05d}" for i in range(self.num_users)]}
 
@@ -208,7 +206,6 @@ class MultimodalDataGenerator:
         self.profiles = pd.DataFrame(df_data)
 
     def _generate_base_transactions(self):
-        """Generates random historical transactions for internal feature calculations."""
         transactions = []
         end_date = datetime.now()
 
@@ -230,7 +227,6 @@ class MultimodalDataGenerator:
         self.transactions = pd.DataFrame(transactions)
 
     def _generate_base_nlp_sentiments(self):
-        """Computes internal latent text parameters based on proxy demographic biases."""
         sentiments = []
         biases = self.sentiment_config.get("biases", [])
 
@@ -267,7 +263,6 @@ class MultimodalDataGenerator:
         self.ghost_abt_sentiments = pd.DataFrame(sentiments)
 
     def _internal_feature_engineering(self):
-        """Assembles the internal Ghost ABT feature matrix via vector operations."""
         end_date = pd.to_datetime(datetime.now())
         df_tx = self.transactions.copy()
         df_tx["Trans_Date"] = pd.to_datetime(df_tx["Trans_Date"])
@@ -298,7 +293,6 @@ class MultimodalDataGenerator:
         ]
 
     def _apply_math_model(self):
-        """Calculates latent variables using a contextual python execution environment."""
         z_scores = np.zeros(len(self.ghost_abt))
         base_context = {col: self.ghost_abt[col] for col in self.ghost_abt.columns}
         base_context.update(
@@ -328,7 +322,6 @@ class MultimodalDataGenerator:
         self.profiles[self.target_col] = np.random.binomial(1, probs)
 
     def _apply_behavioral_logic(self):
-        """Adjusts transaction history lengths based on output flags."""
         cutoff = self.behavioral_logic.get("STORY_LIFESPAN_CUTOFF", {})
         trends = self.behavioral_logic.get("STORY_TRANSACTION_TRENDS", {})
 
@@ -349,30 +342,28 @@ class MultimodalDataGenerator:
 
     def _generate_llm_reviews(self):
         """
-        Генерирует реалистичные, многоаспектные отзывы на основе детального
-        конфига преимуществ (Pros) и операционных проблем (Cons).
+        Compiles and dispatches multiple review requests simultaneously to the
+        Ollama server using ThreadPoolExecutor for highly parallelized execution.
         """
         reviews = []
+        generation_tasks = []
         cfg = self.sentiment_config
         mapping = cfg.get("mapping", {})
         review_probs = cfg.get("review_count_probs", [0.60, 0.25, 0.10, 0.05])
         review_counts = [0, 1, 2, 3]
 
+        print("Analyzing schemas and formatting evaluation prompt packages...")
         for _, row in self.profiles.iterrows():
-            # Определяем количество оставляемых отзывов для данного клиента
             num_reviews = np.random.choice(review_counts, p=review_probs)
             if num_reviews == 0:
                 continue
 
             target_val = str(row[self.target_col])
             behavior = mapping.get(target_val, mapping.get("0", {})).copy()
-
-            # Базовая длина отзыва по умолчанию
             length_instruction = (
                 "Output exactly 2 sentences of the review text and nothing else."
             )
 
-            # Применяем демографические смещения (Biases) из конфигурации
             for bias in cfg.get("biases", []):
                 col, op, val = (
                     bias.get("column"),
@@ -389,7 +380,6 @@ class MultimodalDataGenerator:
                             "length_instruction", length_instruction
                         )
 
-            # Нормализуем вероятности после наложения смещений
             behavior["positive"] = max(0.0, behavior["positive"])
             behavior["negative"] = max(0.0, behavior["negative"])
             total = (
@@ -403,16 +393,13 @@ class MultimodalDataGenerator:
                 behavior["negative"] / total,
             ]
 
-            # Создаем отзывы для текущего пользователя
             for _ in range(num_reviews):
                 chosen_sentiment = np.random.choice(
                     ["positive", "neutral", "negative"], p=p_dist
                 )
-
-                # --- ДИНАМИЧЕСКИЙ ПОДБОР TEMАТИЧЕСКИХ АСПЕКТОВ ---
                 aspects_to_mention = []
 
-                if target_val == "0":  # Лояльный клиент
+                if target_val == "0":
                     if chosen_sentiment == "positive" and "advantages" in behavior:
                         aspects_to_mention = random.sample(
                             behavior["advantages"],
@@ -429,8 +416,7 @@ class MultimodalDataGenerator:
                         aspects_to_mention = [
                             "general baseline satisfaction with services"
                         ]
-
-                elif target_val == "1":  # Уходящий клиент (Отток)
+                elif target_val == "1":
                     if (
                         chosen_sentiment == "negative"
                         and "critical_problems" in behavior
@@ -451,49 +437,86 @@ class MultimodalDataGenerator:
                             "overall platform failure and service degradation"
                         ]
 
-                # Конвертируем аспекты в понятную строку контекста для LLM-инструкции
                 context_str = ", ".join(
                     [a.replace("_", " ") for a in aspects_to_mention]
                 )
 
-                # --- РЕЖИМ БЕЗ НЕЙРОСЕТИ (--no-ai) ---
-                if self.no_ai:
-                    text = f"""{{"sentiment": "{chosen_sentiment}", "explicit_aspects": [{", ".join([f"'{a}'" for a in aspects_to_mention])}]}}"""
+                # Context payloads saved for execution mapping
+                task_metadata = {
+                    "Target_ID": row["Target_ID"],
+                    "Review_Date": (
+                        datetime.now() - timedelta(days=random.randint(1, 100))
+                    ).strftime("%Y-%m-%d"),
+                    "chosen_sentiment": chosen_sentiment,
+                    "aspects_to_mention": aspects_to_mention,
+                    "context_str": context_str,
+                    "length_instruction": length_instruction,
+                }
+                generation_tasks.append(task_metadata)
 
-                # --- РЕЖИМ ГЕНЕРАЦИИ ЧЕРЕЗ ЛОКАЛЬНЫЙ ИИ ---
-                else:
-                    system_instruction = (
-                        "You are an automated corporate review generator mimicking realistic customer feedback. "
-                        "CRITICAL: Output ONLY the raw text response. Never include explanations, pleasantries, intro, or markdown ticks. "
-                        f"{length_instruction}"
-                    )
-
-                    user_prompt = (
-                        f"Generate a realistic customer review with strict {chosen_sentiment.upper()} emotional tone.\n"
-                        f"The customer must explicitly focus on the following details: {context_str}.\n"
-                        "Raw Review Text:"
-                    )
-
-                    full_prompt = f"<start_of_turn>user\n{system_instruction}\n\n{user_prompt}<end_of_turn>\n<start_of_turn>model\n"
-
-                    text = ask_ollama(full_prompt)
-                    text = text.strip().strip('"').strip("'")
-
+        # --- PROCESS PIPELINE ACCORDING TO RUNTIME FLAGS ---
+        if self.no_ai:
+            for task in tqdm(generation_tasks, desc="Generating Mock Reviews (No-AI)"):
+                text = f"""{{"sentiment": "{task["chosen_sentiment"]}", "explicit_aspects": [{", ".join([f"'{a}'" for a in task["aspects_to_mention"]])}]}}"""
                 reviews.append(
                     {
                         "Review_ID": f"REV-{random.randint(100000, 999999)}",
-                        "Target_ID": row["Target_ID"],
-                        "Review_Date": (
-                            datetime.now() - timedelta(days=random.randint(1, 100))
-                        ).strftime("%Y-%m-%d"),
+                        "Target_ID": task["Target_ID"],
+                        "Review_Date": task["Review_Date"],
                         "Review_Text": text,
                     }
                 )
+        else:
+            # Multi-threaded dynamic execution loop mapping directly into the concurrent Ollama worker framework
+            print(
+                f"Spamming system queue with {len(generation_tasks)} contextual requests across {MAX_CONCURRENT_REQUESTS} concurrent execution pipelines..."
+            )
+
+            with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_REQUESTS) as executor:
+                future_to_task = {}
+
+                for task in generation_tasks:
+                    system_instruction = (
+                        "You are an automated corporate review generator mimicking realistic customer feedback. "
+                        "CRITICAL: Output ONLY the raw text response. Never include explanations, pleasantries, intro, or markdown ticks. "
+                        f"{task['length_instruction']}"
+                    )
+                    user_prompt = (
+                        f"Generate a realistic customer review with strict {task['chosen_sentiment'].upper()} emotional tone.\n"
+                        f"The customer must explicitly focus on the following details: {task['context_str']}.\n"
+                        "Raw Review Text:"
+                    )
+                    full_prompt = f"<start_of_turn>user\n{system_instruction}\n\n{user_prompt}<end_of_turn>\n<start_of_turn>model\n"
+
+                    # Submit to thread execution bank immediately
+                    future = executor.submit(ask_ollama, full_prompt)
+                    future_to_task[future] = task
+
+                # Collect and assemble results natively as compute windows clear out
+                for future in tqdm(
+                    as_completed(future_to_task),
+                    total=len(future_to_task),
+                    desc="Processing Ollama Compute Stream",
+                ):
+                    task = future_to_task[future]
+                    try:
+                        text = future.result()
+                        text = text.strip().strip('"').strip("'")
+                    except Exception:
+                        text = "System processing failure exception occurred."
+
+                    reviews.append(
+                        {
+                            "Review_ID": f"REV-{random.randint(100000, 999999)}",
+                            "Target_ID": task["Target_ID"],
+                            "Review_Date": task["Review_Date"],
+                            "Review_Text": text,
+                        }
+                    )
 
         self.reviews = pd.DataFrame(reviews)
 
     def _get_noise_target_cols(self, cfg_target, df: pd.DataFrame) -> list:
-        """Helper to resolve columns targeted for error injection."""
         if cfg_target == "all":
             return [c for c in df.columns if c not in ["Target_ID", self.target_col]]
         if isinstance(cfg_target, str) and cfg_target in self.config:
@@ -504,7 +527,6 @@ class MultimodalDataGenerator:
         return []
 
     def _apply_profile_noise(self):
-        """Injects errors into the raw profile features for the Seminar 1 assignment."""
         cfg_block = self.noise_injection
         if not cfg_block:
             return
@@ -591,12 +613,10 @@ class MultimodalDataGenerator:
             )
 
     def _mask_inference_targets(self):
-        """Nullifies target variables across the final 300 records to create the inference set."""
         mask_indices = self.profiles.index[-self.num_inference_rows :]
         self.profiles.loc[mask_indices, self.target_col] = np.nan
 
     def _purge_and_export(self):
-        """Purges internal features and ensures the profile schema matches constraints."""
         num_features = self._ensure_list("SCHEMA_NUM_FEATURE_X")
         cat_features = self._ensure_list("SCHEMA_CAT_FEATURE_Y")
 
@@ -626,7 +646,6 @@ def main():
     print(f"Executing Configuration Fetch for Variant Group #{args.variant}...")
     config = fetch_config_from_gsheet(args.variant)
 
-    # Strictly call and resolve destination paths based on the dataset_id parameter
     dataset_name = config.get("dataset_id", f"variant_{args.variant}").strip()
     out_dir = os.path.join("data", "processed", dataset_name)
     print(f"Target Output Directory Verified: {out_dir}")
