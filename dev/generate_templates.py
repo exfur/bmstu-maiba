@@ -9,7 +9,7 @@ import nbformat
 # Папка, где лежат исходные мастер-ноутбуки (с решениями и шаблонами)
 SOURCE_DIR = os.path.join(".", "examples", "seminars")
 # Папка, куда сохраняются чистые студенческие версии
-TARGET_DIR = r"C:\Users\User\Projects\bmstu\maiba\seminars"
+TARGET_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "seminars"))
 
 
 # ==========================================
