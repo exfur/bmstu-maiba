@@ -87,9 +87,9 @@ if __name__ == "__main__":
     convert_ipynb_to_txt(SEMINARS_INPUT, SEMINARS_OUTPUT)
 
     # 2. Course Project Notebooks Reverse Processing
-    # Using a raw string (r"...") to safely handle Windows backslashes
-    NOTEBOOKS_INPUT = (
-        r"C:\Users\User\Projects\bmstu\maiba\dev\examples\course_project\notebooks"
+    # Using a dynamic path to handle different environments
+    NOTEBOOKS_INPUT = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "examples", "course_project", "notebooks")
     )
     NOTEBOOKS_OUTPUT = os.path.join("data/land_data", "notebooks")
 
