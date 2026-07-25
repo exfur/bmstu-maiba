@@ -1,4 +1,4 @@
-for ($i = 1; $i -le 15; $i++) {
+for ($i = 2; $i -le 15; $i++) {
     Write-Host "`n====================================" -ForegroundColor Cyan
     Write-Host "Running iteration $i of 15" -ForegroundColor Cyan
     Write-Host "====================================" -ForegroundColor Cyan
