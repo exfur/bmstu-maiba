@@ -6,3 +6,4 @@ uv.lock
 sandbox
 *.env
 project_context.txt
+.github

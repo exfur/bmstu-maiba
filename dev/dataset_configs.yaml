@@ -1,0 +1,183 @@
+01_telco_customer_churn:
+  target_column: Churn
+  numeric_columns:
+    - tenure
+    - MonthlyCharges
+    - TotalCharges
+  categorical_columns:
+    - gender
+    - Contract
+    - PaymentMethod
+    - TechSupport
+  date_columns:
+    - JoinDate
+02_bank_customer_churn:
+  target_column: Exited
+  numeric_columns:
+    - CreditScore
+    - Balance
+    - EstimatedSalary
+  categorical_columns:
+    - Geography
+    - Gender
+    - HasCrCard
+    - IsActiveMember
+  date_columns:
+    - JoinDate
+03_credit_risk_scoring:
+  target_column: Default
+  numeric_columns:
+    - Age
+    - Income
+    - DebtToIncome
+  categorical_columns:
+    - Education
+    - Employment
+    - HomeOwnership
+  date_columns:
+    - LoanDate
+04_ecommerce_purchase_intent:
+  target_column: Converted
+  numeric_columns:
+    - SessionDuration
+    - PageViews
+    - BounceRate
+  categorical_columns:
+    - Browser
+    - Region
+    - VisitorType
+    - Weekend
+  date_columns:
+    - VisitDate
+05_hotel_booking_cancellations:
+  target_column: Cancelled
+  numeric_columns:
+    - LeadTime
+    - Price
+    - PreviousCancellations
+  categorical_columns:
+    - Meal
+    - Country
+    - MarketSegment
+    - DepositType
+  date_columns:
+    - BookingDate
+06_employee_attrition_hr:
+  target_column: Lapsed
+  numeric_columns:
+    - Distance
+    - RewardPoints
+    - DiscountUsage
+  categorical_columns:
+    - LoyaltyTier
+    - PreferredPayment
+  date_columns:
+    - JoinDate
+07_saas_subscription_churn:
+  target_column: Cancelled
+  numeric_columns:
+    - MRR
+    - Seats
+    - StorageUsed
+  categorical_columns:
+    - PlanType
+    - Industry
+    - PaymentMethod
+  date_columns:
+    - SignupDate
+08_food_delivery_conversion:
+  target_column: Retained
+  numeric_columns:
+    - DeliveryTime
+    - OrderValue
+    - Distance
+  categorical_columns:
+    - RestType
+    - Weather
+    - Payment
+  date_columns:
+    - OrderDate
+09_ride_sharing_demand:
+  target_column: Abandoned
+  numeric_columns:
+    - AvgDistance
+    - SurgeMultiplier
+    - Rating
+  categorical_columns:
+    - CarType
+    - TimeOfDay
+    - Weather
+  date_columns:
+    - SignupDate
+10_edtech_student_dropout:
+  target_column: Dropped
+  numeric_columns:
+    - WatchTime
+    - QuizScore
+    - Assignments
+  categorical_columns:
+    - Major
+    - Device
+    - Gender
+  date_columns:
+    - EnrollDate
+11_medical_appointment_noshows:
+  target_column: NoShow
+  numeric_columns:
+    - Age
+    - Distance
+    - WaitDays
+  categorical_columns:
+    - Gender
+    - Neighborhood
+    - Scholarship
+  date_columns:
+    - ApptDate
+12_insurance_claims_fraud:
+  target_column: Fraud
+  numeric_columns:
+    - ClaimAmount
+    - Premium
+    - PolicyTenure
+  categorical_columns:
+    - PolicyType
+    - IncidentSeverity
+    - Authorities
+  date_columns:
+    - IncidentDate
+13_real_estate_conversions:
+  target_column: Stale
+  numeric_columns:
+    - Price
+    - Sqft
+    - YearBuilt
+  categorical_columns:
+    - Zipcode
+    - Condition
+    - View
+  date_columns:
+    - ListDate
+14_fitness_club_renewals:
+  target_column: Renewed
+  numeric_columns:
+    - Age
+    - Checkins
+    - MonthsActive
+  categorical_columns:
+    - Plan
+    - Gender
+    - PromoCode
+  date_columns:
+    - JoinDate
+15_mmo_game_player_churn:
+  target_column: Churned
+  numeric_columns:
+    - PlayHours
+    - Level
+    - Microtransactions
+  categorical_columns:
+    - Class
+    - Guild
+    - Server
+  date_columns:
+    - JoinDate
