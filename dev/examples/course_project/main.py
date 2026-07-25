@@ -8,24 +8,26 @@ from src.data_pipeline import (
     engineer_profile_features,
     extract_sentiment_features,
 )
+from src.forecasting import forecast_trends
 from src.model_training import run_automl_and_explain, train_baseline_models
 
 
 def main():
     # Dynamic repository lookup paths
-    repo_root = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "..")
-    )
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
     input_dir = os.path.join(repo_root, "data", "input")
     processed_dir = os.path.join(repo_root, "data", "processed")
+    powerbi_dir = os.path.join(repo_root, "data", "powerbi")
+
     os.makedirs(processed_dir, exist_ok=True)
+    os.makedirs(powerbi_dir, exist_ok=True)
 
     print("=====================================================")
     print("  MIIBA Course Project - End-to-End Orchestrator")
     print("=====================================================")
 
     # 1. LOAD DATA SOURCE PATHS
-    print(f"\n[1/5] Loading Variant 1 raw data from: {input_dir}")
+    print(f"\n[1/6] Loading Variant 1 raw data from: {input_dir}")
     profiles_path = os.path.join(input_dir, "profiles.csv")
     trans_path = os.path.join(input_dir, "transactions.csv")
     reviews_path = os.path.join(input_dir, "reviews.csv")
@@ -39,10 +41,8 @@ def main():
     df_reviews = pd.read_csv(reviews_path)
 
     # 2. RUN PIPELINES (CLEANING & ENGINEERING)
-    print("\n[2/5] Executing Data Cleaning & Engineering Pipelines...")
-    df_profiles_clean = clean_and_normalise_dataframe(
-        df_profiles, datetime_cols=["Join_Date"]
-    )
+    print("\n[2/6] Executing Data Cleaning & Engineering Pipelines...")
+    df_profiles_clean = clean_and_normalise_dataframe(df_profiles, datetime_cols=["Join_Date"])
 
     df_profiles_eng = engineer_profile_features(
         df_profiles_clean,
@@ -56,51 +56,56 @@ def main():
         date_col="Trans_Date",
         amount_col="Trans_Amount",
     )
-    df_sentiment = extract_sentiment_features(
-        df_reviews, text_col="Review_Text", id_col="Target_ID"
-    )
+    df_sentiment = extract_sentiment_features(df_reviews, text_col="Review_Text", id_col="Target_ID")
 
-    # 3. ASSEMBLE ABT
-    print("\n[3/5] Orchestrating Left Joins & Assembling ABT...")
+    # 3. ASSEMBLE & EXPORT ABT FOR POWER BI
+    print("\n[3/6] Orchestrating Left Joins & Assembling ABT...")
     df_abt = assemble_abt([df_profiles_eng, df_rfm, df_sentiment], on_col="Target_ID")
 
     abt_path = os.path.join(processed_dir, "abt_result.csv")
+    powerbi_abt_path = os.path.join(powerbi_dir, "abt_processed.csv")
+
     df_abt.to_csv(abt_path, index=False)
+    df_abt.to_csv(powerbi_abt_path, index=False)
     print(f"ABT successfully exported. Shape: {df_abt.shape}")
+    print(f"💾 Exported Power BI ABT table to: {powerbi_abt_path}")
 
     # 4. TRAINING BASELINE MODELS
-    print("\n[4/5] Training Baseline Scikit-Learn Models...")
-    # Dynamic target detector - will automatically select 'Churn' for Variant 1
+    print("\n[4/6] Training Baseline Scikit-Learn Models...")
     target_col = "Churn" if "Churn" in df_abt.columns else "Target_Flag"
     if target_col not in df_abt.columns:
         print(f"Error: Could not locate Target column ('{target_col}') in ABT.")
         return
 
-    # Fix applied: Automatically ignores 'Join_Date' and unencoded columns safely
-    feature_cols = [
-        c
-        for c in df_abt.columns
-        if c not in ["Target_ID", target_col, "Target_Flag_Predicted"]
-        and pd.api.types.is_numeric_dtype(df_abt[c])
-    ]
+    feature_cols = [c for c in df_abt.columns if c not in ["Target_ID", target_col, "Target_Flag_Predicted"] and pd.api.types.is_numeric_dtype(df_abt[c])]
 
     print(f"Selected {len(feature_cols)} numeric features for model training.")
 
-    baseline_results = train_baseline_models(
-        df_abt, target_col=target_col, feature_cols=feature_cols
-    )
+    baseline_results = train_baseline_models(df_abt, target_col=target_col, feature_cols=feature_cols, output_dir=powerbi_dir)
     print(f"Baseline Validation Metrics:\n{baseline_results.get('metrics')}")
 
-    # 5. AUTOML ANSEMBLING
-    print("\n[5/5] Searching best hyperparameters via PyCaret AutoML...")
+    # 5. AUTOML MODEL EVALUATION
+    print("\n[5/6] Searching best hyperparameters via PyCaret AutoML...")
     try:
-        final_model, explainer, leaderboard = run_automl_and_explain(
-            df_abt, target_col=target_col
-        )
-        print("\nTop 3 Models Identified by PyCaret leaderboard:")
-        print(leaderboard.head(3))
+        final_model, explainer, leaderboard = run_automl_and_explain(df_abt, target_col=target_col, output_dir=powerbi_dir)
+        if leaderboard is not None:
+            print("\nTop 3 Models Identified by PyCaret leaderboard:")
+            print(leaderboard.head(3))
     except Exception as e:
         print(f"AutoML runtime execution notice: {e}")
+
+    # 6. TIME-SERIES TREND FORECASTING FOR POWER BI
+    print("\n[6/6] Generating Time-Series Trends for Power BI...")
+    try:
+        forecast_trends(
+            df_trans,
+            date_col="Trans_Date",
+            value_col="Trans_Amount",
+            periods=30,
+            output_dir=powerbi_dir,
+        )
+    except Exception as e:
+        print(f"Forecasting execution notice: {e}")
 
     print("\n✅ All processes executed successfully!")
 
