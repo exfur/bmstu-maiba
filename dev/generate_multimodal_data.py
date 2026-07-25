@@ -212,7 +212,7 @@ class MultimodalDataGenerator:
 
                 print(f"  ✅ Covariance rule successfully committed to feature matrix: {column_to_update}")
             except Exception as e:
-                print(f"  ⚠️ Skipping covariance rule for column '{column_to_update}' due to execution failure: {str(e)}")
+                print(f"  ⚠️ Skipping covariance rule for column '{column_to_update}' due to execution failure: {e!s}")
 
         self.profiles = df
 
@@ -233,6 +233,16 @@ class MultimodalDataGenerator:
         transactions = []
         end_date = datetime.now()
 
+        # --- НОВЫЙ БЛОК: Инициализация настроек сезонности ---
+        # Ищем настройки в BEHAVIORAL_LOGIC, если их нет - используем дефолтные
+        seasonality = self.behavioral_logic.get("SEASONALITY", {})
+        weekend_mult = seasonality.get("weekend_multiplier", 1.4)  # На выходных тратят на 40% больше
+        holiday_mult = seasonality.get("holiday_multiplier", 2.5)  # В праздники тратят в 2.5 раза больше
+
+        # Базовый календарь праздников (Месяц, День)
+        holidays = [(12, 31), (1, 1), (3, 8), (2, 23), (11, 11), (11, 24)]  # НГ, 8 марта, Черная Пятница и т.д.
+        # -----------------------------------------------------
+
         for _, row in self.profiles.iterrows():
             target_id = row["Target_ID"]
 
@@ -249,12 +259,22 @@ class MultimodalDataGenerator:
                 t_date = join_date + timedelta(days=random_days_added)
                 amt = round(random.uniform(10.0, 150.0), 2)
 
+                # --- НОВЫЙ БЛОК: Применение сезонности к сумме ---
+                # Если это выходной (суббота=5, воскресенье=6)
+                if t_date.weekday() >= 5:
+                    amt *= weekend_mult
+
+                # Если это праздник из нашего списка
+                if (t_date.month, t_date.day) in holidays:
+                    amt *= holiday_mult
+                # -------------------------------------------------
+
                 transactions.append(
                     {
                         "Transaction_ID": f"TXN-{random.randint(100000, 999999)}",
                         "Target_ID": target_id,
                         "Trans_Date": t_date.strftime("%Y-%m-%d %H:%M:%S"),
-                        "Trans_Amount": amt,
+                        "Trans_Amount": round(amt, 2),
                     }
                 )
         self.transactions = pd.DataFrame(transactions)
@@ -490,6 +510,20 @@ class MultimodalDataGenerator:
                     val = str(self.profiles.loc[idx, col])
                     self.profiles.loc[idx, col] = val.lower() if random.choice(cfg.get("values", ["lowercase"])) == "lowercase" else val.upper()
 
+        if "ERR_ROW_DUPLICATE" in cfg_block:
+            cfg = cfg_block["ERR_ROW_DUPLICATE"]
+            ratio = cfg.get("ratio", 0.05)
+            num_duplicates = int(len(self.profiles) * ratio)
+
+            if num_duplicates > 0:
+                # Случайный выбор строк для дублирования
+                duplicates = self.profiles.sample(n=num_duplicates, replace=True)
+                # Добавление дубликатов в конец датафрейма
+                self.profiles = pd.concat([self.profiles, duplicates], ignore_index=True)
+                # Тщательное перемешивание, чтобы дубликаты не скопились в конце
+                # (это критично для корректной работы последующего _mask_inference_targets)
+                self.profiles = self.profiles.sample(frac=1).reset_index(drop=True)
+
     def _mask_inference_targets(self):
         if self.target_col in self.profiles.columns:
             mask_indices = self.profiles.index[-self.num_inference_rows :]
@@ -503,6 +537,31 @@ class MultimodalDataGenerator:
         export_p_cols = [c for c in allowed_p_cols if c in self.profiles.columns]
 
         final_profiles = self.profiles[export_p_cols].copy()
+
+        # ==========================================
+        # НОВЫЙ БЛОК: МУСОР В ЗАГОЛОВКАХ (ERR_DIRTY_COLUMNS)
+        # Применяется после сборки, чтобы не сломать экспорт
+        # ==========================================
+        cfg_block = self.noise_injection
+        if cfg_block and "ERR_DIRTY_COLUMNS" in cfg_block:
+            cfg = cfg_block["ERR_DIRTY_COLUMNS"]
+            new_cols = []
+            for col in final_profiles.columns:
+                # Ключевые колонки не трогаем, чтобы не сломать джойны
+                if col in ["Target_ID", self.target_col]:
+                    new_cols.append(col)
+                elif random.random() < cfg.get("ratio", 0.5):
+                    pos = random.choice(cfg.get("position", ["trailing", "leading"]))
+                    if pos == "trailing":
+                        new_cols.append(f"{col} ")
+                    elif pos == "leading":
+                        new_cols.append(f" {col}")
+                    else:
+                        new_cols.append(f" {col} ")
+                else:
+                    new_cols.append(col)
+            final_profiles.columns = new_cols
+
         final_transactions = self.transactions[["Transaction_ID", "Target_ID", "Trans_Date", "Trans_Amount"]].copy() if not self.transactions.empty else pd.DataFrame()
         final_reviews = self.reviews[["Review_ID", "Target_ID", "Review_Date", "Review_Text"]].copy() if not self.reviews.empty else pd.DataFrame()
 
