@@ -12,7 +12,19 @@ from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, mean_absolute_error, mean_squared_error, precision_recall_curve, precision_score, r2_score, recall_score, roc_auc_score, roc_curve
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    mean_absolute_error,
+    mean_squared_error,
+    precision_recall_curve,
+    precision_score,
+    r2_score,
+    recall_score,
+    roc_auc_score,
+    roc_curve,
+)
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier
@@ -468,7 +480,7 @@ def main():
 
             print(f"  ✅ Comprehensive deep-dive complete for {dataset}.")
         except Exception as e:
-            print(f"  ❌ Error processing {dataset}: {str(e)}")
+            print(f"  ❌ Error processing {dataset}: {e!s}")
 
 
 if __name__ == "__main__":

@@ -53,7 +53,7 @@ def generate_table_index():
                     output_lines.append(f"       Columns: {columns_str}")
             except Exception as e:
                 output_lines.append(
-                    f"       Columns: [Error reading headers - {str(e)}]"
+                    f"       Columns: [Error reading headers - {e!s}]"
                 )
 
         output_lines.append("")  # Spacer between datasets

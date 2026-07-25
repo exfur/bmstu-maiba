@@ -12,9 +12,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 warnings.filterwarnings("ignore")
 
 
-def clean_and_normalise_dataframe(
-    df: pd.DataFrame, datetime_cols: list = None, drop_dup: bool = True
-) -> pd.DataFrame:
+def clean_and_normalise_dataframe(df: pd.DataFrame, datetime_cols: list = None, drop_dup: bool = True) -> pd.DataFrame:
     """
     Industrial ETL function for end-to-end cleaning and normalization of the profiles dataframe.
     Ensures numerical columns like 'tenure' are explicitly cast to prevent comparison type errors.
@@ -45,9 +43,7 @@ def clean_and_normalise_dataframe(
     numeric_targets = ["TotalCharges", "MonthlyCharges", "Num_Feature_X"]
     for col in numeric_targets:
         if col in df_clean.columns:
-            df_clean[col] = (
-                df_clean[col].astype(str).str.replace(r"[^\d.]", "", regex=True)
-            )
+            df_clean[col] = df_clean[col].astype(str).str.replace(r"[^\d.]", "", regex=True)
             df_clean[col] = pd.to_numeric(df_clean[col], errors="coerce")
             if "tenure" in df_clean.columns:
                 # Business logic: If customer is completely new (tenure == 0), assign zero charges
@@ -126,9 +122,7 @@ def engineer_profile_features(
     if categorical_to_encode:
         actual_cat = [c for c in categorical_to_encode if c in df_engineered.columns]
         if actual_cat:
-            df_engineered = pd.get_dummies(
-                df_engineered, columns=actual_cat, drop_first=True, dtype=float
-            )
+            df_engineered = pd.get_dummies(df_engineered, columns=actual_cat, drop_first=True, dtype=float)
 
     # 4. Scaling
     if numeric_to_scale:
@@ -210,33 +204,23 @@ def extract_sentiment_features(
     clean_col = "Clean_Text_Tmp"
     df_pipe[clean_col] = df_pipe[text_col].astype(str).str.lower()
     df_pipe[clean_col] = df_pipe[clean_col].str.replace(r"[^\w\s]", " ", regex=True)
-    df_pipe[clean_col] = (
-        df_pipe[clean_col].str.replace(r"\s+", " ", regex=True).str.strip()
-    )
+    df_pipe[clean_col] = df_pipe[clean_col].str.replace(r"\s+", " ", regex=True).str.strip()
 
     # 2. Robust Absolute Path Resolver
     resolved_path = os.path.abspath(model_name)
 
     # Fallback: Check climbing up from dev/ folder structure context
     if not os.path.exists(resolved_path) or not os.listdir(resolved_path):
-        root_fallback = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", model_name)
-        )
+        root_fallback = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", model_name))
         if os.path.exists(root_fallback) and os.listdir(root_fallback):
             resolved_path = root_fallback
 
     # Determine if a valid local directory with cached model files is present
-    is_local_present = (
-        os.path.exists(resolved_path)
-        and os.path.isdir(resolved_path)
-        and len(os.listdir(resolved_path)) > 0
-    )
+    is_local_present = os.path.exists(resolved_path) and os.path.isdir(resolved_path) and len(os.listdir(resolved_path)) > 0
 
     # 3. Conditional Pipeline Loading (Offline vs Self-Healing Installer)
     if is_local_present:
-        print(
-            f"⏳ Loading local Transformer weights from absolute path: {resolved_path}"
-        )
+        print(f"⏳ Loading local Transformer weights from absolute path: {resolved_path}")
         nlp_classifier = pipeline(
             "text-classification",
             model=resolved_path,
@@ -250,9 +234,7 @@ def extract_sentiment_features(
         remote_repo = "tabularisai/multilingual-sentiment-analysis"
         print(f"⚠️ Local weights not found or folder is empty at: '{resolved_path}'")
         print(f"📥 Downloading weights for '{remote_repo}' from Hugging Face Hub...")
-        print(
-            f"💾 Saving components locally to '{resolved_path}' for future offline runs..."
-        )
+        print(f"💾 Saving components locally to '{resolved_path}' for future offline runs...")
 
         # Build the exact local directory tree structure
         os.makedirs(resolved_path, exist_ok=True)
@@ -313,3 +295,18 @@ def assemble_abt(dfs_list: list, on_col: str) -> pd.DataFrame:
     df_final[numeric_cols] = df_final[numeric_cols].fillna(0)
 
     return df_final
+
+
+def export_to_bi(df: pd.DataFrame, file_name: str, export_dir: str = "../data/processed/bi_export/"):
+    """
+    Универсальная функция для сохранения артефактов в витрину данных Power BI.
+    Создает директорию, если она не существует, и сохраняет датафрейм.
+    """
+    # Создаем папку для BI, если её нет
+    os.makedirs(export_dir, exist_ok=True)
+
+    file_path = os.path.join(export_dir, file_name)
+
+    # Экспортируем без индексов, чтобы Power Query не считывал лишнюю колонку
+    df.to_csv(file_path, index=False, encoding="utf-8")
+    print(f"✅ Файл успешно экспортирован для Power BI: {file_path}")
