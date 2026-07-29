@@ -1,0 +1,35 @@
+2026-07-29 19:24:28,238:WARNING:
+'xgboost' is a soft dependency and not included in the pycaret installation. Install it with: `pip install xgboost`.
+Or install the extras bundle: `pip install pycaret[models]`.
+2026-07-29 19:24:28,238:INFO:Soft dependency imported: lightgbm: 4.7.0
+2026-07-29 19:24:28,432:WARNING:
+'catboost' is a soft dependency and not included in the pycaret installation. Install it with: `pip install catboost`.
+Or install the extras bundle: `pip install pycaret[models]`.
+2026-07-29 19:26:15,966:WARNING:
+'xgboost' is a soft dependency and not included in the pycaret installation. Install it with: `pip install xgboost`.
+Or install the extras bundle: `pip install pycaret[models]`.
+2026-07-29 19:26:15,966:INFO:Soft dependency imported: lightgbm: 4.7.0
+2026-07-29 19:26:15,967:WARNING:
+'catboost' is a soft dependency and not included in the pycaret installation. Install it with: `pip install catboost`.
+Or install the extras bundle: `pip install pycaret[models]`.
+2026-07-29 19:29:52,803:WARNING:
+'xgboost' is a soft dependency and not included in the pycaret installation. Install it with: `pip install xgboost`.
+Or install the extras bundle: `pip install pycaret[models]`.
+2026-07-29 19:29:52,803:INFO:Soft dependency imported: lightgbm: 4.7.0
+2026-07-29 19:29:52,803:WARNING:
+'catboost' is a soft dependency and not included in the pycaret installation. Install it with: `pip install catboost`.
+Or install the extras bundle: `pip install pycaret[models]`.
+2026-07-29 19:33:50,684:WARNING:
+'xgboost' is a soft dependency and not included in the pycaret installation. Install it with: `pip install xgboost`.
+Or install the extras bundle: `pip install pycaret[models]`.
+2026-07-29 19:33:50,684:INFO:Soft dependency imported: lightgbm: 4.7.0
+2026-07-29 19:33:50,684:WARNING:
+'catboost' is a soft dependency and not included in the pycaret installation. Install it with: `pip install catboost`.
+Or install the extras bundle: `pip install pycaret[models]`.
+2026-07-29 19:42:41,503:WARNING:
+'xgboost' is a soft dependency and not included in the pycaret installation. Install it with: `pip install xgboost`.
+Or install the extras bundle: `pip install pycaret[models]`.
+2026-07-29 19:42:41,503:INFO:Soft dependency imported: lightgbm: 4.7.0
+2026-07-29 19:42:41,503:WARNING:
+'catboost' is a soft dependency and not included in the pycaret installation. Install it with: `pip install catboost`.
+Or install the extras bundle: `pip install pycaret[models]`.
