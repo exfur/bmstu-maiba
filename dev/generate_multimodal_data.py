@@ -11,7 +11,6 @@ import pandas as pd
 import requests
 from googleapiclient.discovery import build
 from tqdm import tqdm
-
 from utils import get_creds
 
 # ==========================================
@@ -20,7 +19,7 @@ from utils import get_creds
 GSHEET_ID = os.getenv("SOURCE_GSHEET")
 SHEET_NAME = "legends"
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
-OLLAMA_MODEL_NAME = "gemma3:4b"
+OLLAMA_MODEL_NAME = "huihui_ai/gemma-4-abliterated:e2b"
 MAX_CONCURRENT_REQUESTS = 8
 
 
@@ -78,7 +77,16 @@ def get_default_config() -> dict:
 
 def ask_ollama(prompt: str) -> str:
     url = f"{OLLAMA_BASE_URL}/api/generate"
-    payload = {"model": OLLAMA_MODEL_NAME, "prompt": prompt, "stream": False}
+    payload = {
+        "model": OLLAMA_MODEL_NAME,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "num_ctx": 2048,  # Срезаем контекст со 131k до 2k токенов!
+            "num_predict": 128,  # Ограничиваем длину отзыва (до ~100 слов)
+            "temperature": 0.8,
+        },
+    }
     try:
         response = requests.post(url, json=payload, timeout=60)
         response.raise_for_status()
