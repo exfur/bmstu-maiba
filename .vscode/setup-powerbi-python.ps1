@@ -79,13 +79,13 @@ try {
     exit 1
 }
 
-$regKey = "HKCU:\Software\Python\PythonCore\$pyVersion-maiba\InstallPath"
+$regKey = "HKCU:\Software\Python\PythonCore\${pyVersion}-maiba\InstallPath"
 
 New-Item -Path $regKey -Force | Out-Null
 Set-ItemProperty -Path $regKey -Name "(default)" -Value "$scriptsDir\"
 Set-ItemProperty -Path $regKey -Name "ExecutablePath" -Value $venvPython
 
-Write-Host "✅ Successfully registered 'Python $pyVersion-maiba' in Windows Registry." -ForegroundColor Green
+Write-Host "✅ Successfully registered 'Python ${pyVersion}-maiba' in Windows Registry." -ForegroundColor Green
 Write-Host "   Path: $scriptsDir\" -ForegroundColor Gray
 
 # ----------------------------------------------------------------------
@@ -136,6 +136,6 @@ Write-Host "========================================================" -Foregroun
 Write-Host "Next steps for students:" -ForegroundColor White
 Write-Host " 1. Open or restart Power BI Desktop." -ForegroundColor Yellow
 Write-Host " 2. Navigate to: File -> Options and settings -> Options -> Python scripting." -ForegroundColor Yellow
-Write-Host " 3. Under 'Detected Python home directories', select 'Python $pyVersion-maiba'." -ForegroundColor Yellow
+Write-Host " 3. Under 'Detected Python home directories', select 'Python ${pyVersion}-maiba'." -ForegroundColor Yellow
 Write-Host " 4. Click OK and run your Python scripts in Power Query!" -ForegroundColor Yellow
 Write-Host "========================================================`n"
