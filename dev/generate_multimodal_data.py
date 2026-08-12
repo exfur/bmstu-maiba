@@ -76,23 +76,31 @@ def get_default_config() -> dict:
 
 
 def ask_ollama(prompt: str) -> str:
-    url = f"{OLLAMA_BASE_URL}/api/generate"
+    # 1. Меняем эндпоинт с generate на chat
+    url = f"{OLLAMA_BASE_URL}/api/chat"
+
+    # 2. Формируем запрос через массив messages
     payload = {
         "model": OLLAMA_MODEL_NAME,
-        "prompt": prompt,
+        "messages": [{"role": "system", "content": "You are a client, return expressive comment based on user provided guides."}, {"role": "user", "content": prompt}],
         "stream": False,
         "options": {
-            "num_ctx": 2048,  # Срезаем контекст со 131k до 2k токенов!
-            "num_predict": 128,  # Ограничиваем длину отзыва (до ~100 слов)
+            "num_ctx": 2048,
+            "num_predict": 512,  # Запас токенов на 1 отзыв
             "temperature": 0.8,
         },
     }
+
     try:
         response = requests.post(url, json=payload, timeout=60)
         response.raise_for_status()
-        return response.json().get("response", "").strip()
-    except Exception:
-        return "Error generating review text due to system timeout parameters."
+
+        # 3. В /api/chat текст ответа лежит по другому пути!
+        return response.json().get("message", {}).get("content", "").strip()
+
+    except Exception as e:
+        # Выводим саму ошибку, чтобы видеть, если что-то упадет
+        return f"Error: {e}"
 
 
 # ==========================================
